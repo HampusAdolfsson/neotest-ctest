@@ -41,4 +41,5 @@ luac.out
 
 # Other
 *build*
+!/tests/unit/build_spec_spec.lua
 .sandbox

@@ -43,6 +43,69 @@ gtest.tests_query = [[
   )) @namespace.definition
 ]]
 
+-- Parse the output of `<binary> --gtest_list_tests` into a flat list of fully
+-- qualified `Suite.Case` names (matching gtest's own instantiated names, incl.
+-- parameterized `Prefix/Suite.Case/<index>`).
+--
+-- Example input:
+--   Running main() from gmock_main.cc
+--   TestSuite.
+--     CaseA
+--     CaseB
+--   Prefix/ParamSuite.
+--     Case/0  # GetParam() = ...
+function gtest.parse_list_tests(output)
+  local names = {}
+  local current_suite = nil
+
+  for line in string.gmatch(output or "", "[^\r\n]+") do
+    -- A suite header starts in column 0 and ends with a '.'
+    if string.match(line, "^%S.*%.%s*$") then
+      current_suite = vim.trim(line)
+    elseif current_suite and string.match(line, "^%s+%S") then
+      -- A case line is indented; strip any trailing "# GetParam() = ..." note
+      local case = string.gsub(line, "%s+#.*$", "")
+      case = vim.trim(case)
+      if case ~= "" then
+        table.insert(names, current_suite .. case)
+      end
+    end
+  end
+
+  return names
+end
+
+-- Parse the failure texts extracted from a gtest XML report (the CDATA of each
+-- <failure> element) into neotest errors `{ line, message }`.
+--
+-- Unlike gtest's console output, the XML failure text has no "[ RUN ]"/"Failure"
+-- markers: each element is a single failure of the form
+--   <file>:<line>\n<message...>
+-- (older gtest versions add ": Failure" after the line number).
+function gtest.parse_xml_errors(failure_texts)
+  local errors = {}
+
+  for _, text in ipairs(failure_texts or {}) do
+    text = text or ""
+    local header = string.match(text, "^[^\r\n]*")
+    -- Line number is the trailing ":<digits>" on the header, optionally
+    -- followed by ": Failure".
+    local line = string.match(header, ":(%d+):%s*[Ff]ailure")
+      or string.match(header, ":(%d+)%s*$")
+
+    local message = string.match(text, "[\r\n]+(.*)$") or ""
+    message = vim.trim(message)
+
+    if line then
+      table.insert(errors, { line = tonumber(line), message = message })
+    elseif message ~= "" then
+      table.insert(errors, { message = message })
+    end
+  end
+
+  return errors
+end
+
 function gtest.parse_errors(output)
   local capture = vim.trim(string.match(output, "%[%s+RUN%s+%].-[\r\n](.-)%[%s+FAILED%s+%]"))
 

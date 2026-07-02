@@ -218,6 +218,55 @@ describe("gtest.parse_positions", function()
   end)
 end)
 
+describe("gtest.parse_list_tests", function()
+  it("parses plain and parameterized test names", function()
+    local output = table.concat({
+      "Running main() from gmock_main.cc",
+      "SuiteA.",
+      "  Case1",
+      "  Case2",
+      "Prefix/ParamSuite.",
+      "  Case/0  # GetParam() = (\"\", \"\")",
+      "  Case/1  # GetParam() = (\" \", \"\")",
+    }, "\n")
+
+    local names = gtest.parse_list_tests(output)
+
+    assert.are.same({
+      "SuiteA.Case1",
+      "SuiteA.Case2",
+      "Prefix/ParamSuite.Case/0",
+      "Prefix/ParamSuite.Case/1",
+    }, names)
+  end)
+end)
+
+describe("gtest.parse_xml_errors", function()
+  it("parses the gtest v1.14+ XML CDATA failure format", function()
+    -- NOTE: XML CDATA has no "Failure" marker, just "<file>:<line>\n<message>".
+    local failures = {
+      "/path/TEST_test.cpp:10\nValue of: false\n  Actual: false\nExpected: true\n",
+    }
+
+    local errors = gtest.parse_xml_errors(failures)
+
+    assert.equals(1, #errors)
+    assert.equals(10, errors[1].line)
+    assert.equals("Value of: false\n  Actual: false\nExpected: true", errors[1].message)
+  end)
+
+  it("parses the older ':<line>: Failure' XML format", function()
+    local failures = {
+      "/path/TEST_test.cpp:8: Failure\nExpected equality of these values",
+    }
+
+    local errors = gtest.parse_xml_errors(failures)
+
+    assert.equals(1, #errors)
+    assert.equals(8, errors[1].line)
+  end)
+end)
+
 describe("gtest.parse_errors", function()
   it("parses gtest >= v1.14.0 diagnostics correctly", function()
     -- NOTE: Partial GTest output (only the relevant portions are included)

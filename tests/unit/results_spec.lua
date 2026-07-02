@@ -1,9 +1,18 @@
 local assert = require("luassert")
+local stub = require("luassert.stub")
 local adapter = require("neotest-ctest")
+local ctest = require("neotest-ctest.ctest")
 local Tree = require("neotest.types").Tree
 local it = require("nio").tests.it
 
 adapter.setup({})
+
+-- Stub the gtest XML parser with the given `Suite.Case -> result` table.
+local function stub_results(cases)
+  stub(ctest, "parse_results", function(_)
+    return cases
+  end)
+end
 
 describe("position.type == test", function()
   local spec, test_file, positions, tree
@@ -24,13 +33,10 @@ describe("position.type == test", function()
     end)
     spec = {
       context = {
-        ctest = {
-          parse_test_results = function()
-            return {}
-          end,
-        },
+        xml_path = "/tmp/fake.xml",
+        node_ids = { ["Suite.First"] = test_file .. "::Suite.First" },
         framework = {
-          parse_errors = function(_)
+          parse_xml_errors = function(_)
             return {}
           end,
         },
@@ -39,72 +45,26 @@ describe("position.type == test", function()
   end)
 
   it("adapter.results should set status as 'passed' given a passing test", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 1,
-          failures = 0,
-          skipped = 0,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({ ["Suite.First"] = { status = "passed", time = 0, failures = {} } })
     local results = adapter.results(spec, nil, tree)
     assert.equals("passed", results[test_file .. "::Suite.First"].status)
   end)
 
   it("adapter.results should set status as 'failed' given a failing test", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "fail",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 1,
-          failures = 1,
-          skipped = 0,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({ ["Suite.First"] = { status = "failed", time = 0, failures = { "boom" } } })
     local results = adapter.results(spec, nil, tree)
     assert.equals("failed", results[test_file .. "::Suite.First"].status)
   end)
 
   it("adapter.results should set status as 'skipped' given a skipped test", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "skipped",
-          output = "",
-        },
-        summary = {
-          tests = 1,
-          failures = 0,
-          skipped = 1,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({ ["Suite.First"] = { status = "skipped", time = 0, failures = {} } })
     local results = adapter.results(spec, nil, tree)
     assert.equals("skipped", results[test_file .. "::Suite.First"].status)
   end)
 
   it("adapter.results should set status as 'skipped' given an unknown test", function()
-    -- NOTE: Unknown as in "not known to CTest" (i.e. not compiled yet)
-    spec.context.ctest.parse_test_results = function()
-      return {}
-    end
+    -- NOTE: Unknown as in not reported in the XML (e.g. not built / not run)
+    stub_results({})
     local results = adapter.results(spec, nil, tree)
     assert.equals("skipped", results[test_file .. "::Suite.First"].status)
   end)
@@ -148,13 +108,10 @@ describe("position.type == namespace", function()
     end)
     spec = {
       context = {
-        ctest = {
-          parse_test_results = function()
-            return {}
-          end,
-        },
+        xml_path = "/tmp/fake.xml",
+        node_ids = {},
         framework = {
-          parse_errors = function(_)
+          parse_xml_errors = function(_)
             return {}
           end,
         },
@@ -163,81 +120,86 @@ describe("position.type == namespace", function()
   end)
 
   it("adapter.results should set status as 'passed' given passing tests", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        ["Suite.Second"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 2,
-          failures = 0,
-          skipped = 0,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({
+      ["Suite.First"] = { status = "passed", time = 0, failures = {} },
+      ["Suite.Second"] = { status = "passed", time = 0, failures = {} },
+    })
     local results = adapter.results(spec, nil, tree)
     assert.equals("passed", results[test_file .. "::" .. namespace].status)
   end)
 
   it("adapter.results should set status as 'failed' for one or more failing tests", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        ["Suite.Second"] = {
-          status = "fail",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 2,
-          failures = 1,
-          skipped = 0,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({
+      ["Suite.First"] = { status = "passed", time = 0, failures = {} },
+      ["Suite.Second"] = { status = "failed", time = 0, failures = { "boom" } },
+    })
     local results = adapter.results(spec, nil, tree)
     assert.equals("failed", results[test_file .. "::" .. namespace].status)
   end)
 
   it("adapter.results should set status as 'skipped' when all tests are skipped", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "skipped",
-          time = 0,
-          output = "",
-        },
-        ["Suite.Second"] = {
-          status = "skipped",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 2,
-          failures = 0,
-          skipped = 2,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({
+      ["Suite.First"] = { status = "skipped", time = 0, failures = {} },
+      ["Suite.Second"] = { status = "skipped", time = 0, failures = {} },
+    })
     local results = adapter.results(spec, nil, tree)
     assert.equals("skipped", results[test_file .. "::" .. namespace].status)
+  end)
+end)
+
+describe("parameterized suite (namespace)", function()
+  local spec, test_file, tree
+
+  before_each(function()
+    test_file = "TEST_P_test.cpp"
+    local positions = {
+      {
+        id = test_file .. "::ParameterizedBool.Test",
+        name = "ParameterizedBool.Test",
+        path = test_file,
+        range = { 4, 0, 4, 64 },
+        type = "namespace",
+      },
+      {
+        {
+          -- Approximated per-parameter name that does NOT match ground truth.
+          id = test_file .. "::ParameterizedBool.Test::GoogleTest/ParameterizedBool.Test/true",
+          name = "GoogleTest/ParameterizedBool.Test/true",
+          path = test_file,
+          range = { 4, 0, 4, 64 },
+          type = "test",
+        },
+      },
+    }
+    tree = Tree.from_list(positions, function(pos)
+      return pos.id
+    end)
+    spec = {
+      context = {
+        xml_path = "/tmp/fake.xml",
+        node_ids = {},
+        framework = { parse_xml_errors = function(_) return {} end },
+      },
+    }
+  end)
+
+  it("derives suite status from ground-truth instantiated cases", function()
+    -- gtest reports index-based names, not the approximated /true /false.
+    stub_results({
+      ["GoogleTest/ParameterizedBool.Test/0"] = { status = "passed", time = 0, failures = {} },
+      ["GoogleTest/ParameterizedBool.Test/1"] = { status = "failed", time = 0, failures = { "boom" } },
+    })
+    local results = adapter.results(spec, nil, tree)
+    assert.equals("failed", results[test_file .. "::ParameterizedBool.Test"].status)
+  end)
+
+  it("reports suite as passed when all instantiated cases pass", function()
+    stub_results({
+      ["GoogleTest/ParameterizedBool.Test/0"] = { status = "passed", time = 0, failures = {} },
+      ["GoogleTest/ParameterizedBool.Test/1"] = { status = "passed", time = 0, failures = {} },
+    })
+    local results = adapter.results(spec, nil, tree)
+    assert.equals("passed", results[test_file .. "::ParameterizedBool.Test"].status)
   end)
 end)
 
@@ -288,13 +250,10 @@ describe("position.type == file", function()
     end)
     spec = {
       context = {
-        ctest = {
-          parse_test_results = function()
-            return {}
-          end,
-        },
+        xml_path = "/tmp/fake.xml",
+        node_ids = {},
         framework = {
-          parse_errors = function(_)
+          parse_xml_errors = function(_)
             return {}
           end,
         },
@@ -303,106 +262,38 @@ describe("position.type == file", function()
   end)
 
   it("adapter.results should set status as 'passed' given passing tests", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        ["Suite.Second"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 2,
-          failures = 0,
-          skipped = 0,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({
+      ["Suite.First"] = { status = "passed", time = 0, failures = {} },
+      ["Suite.Second"] = { status = "passed", time = 0, failures = {} },
+    })
     local results = adapter.results(spec, nil, tree)
     assert.equals("passed", results[test_file].status)
   end)
 
   it("adapter.results should set status as 'failed' for one or more failing tests", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "fail",
-          time = 0,
-          output = "",
-        },
-        ["Suite.Second"] = {
-          status = "run",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 2,
-          failures = 1,
-          skipped = 0,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({
+      ["Suite.First"] = { status = "failed", time = 0, failures = { "boom" } },
+      ["Suite.Second"] = { status = "passed", time = 0, failures = {} },
+    })
     local results = adapter.results(spec, nil, tree)
     assert.equals("failed", results[test_file].status)
   end)
 
   it("adapter.results should set status as 'skipped' when all tests are skipped", function()
-    spec.context.ctest.parse_test_results = function()
-      return {
-        ["Suite.First"] = {
-          status = "skipped",
-          time = 0,
-          output = "",
-        },
-        ["Suite.Second"] = {
-          status = "skipped",
-          time = 0,
-          output = "",
-        },
-        summary = {
-          tests = 2,
-          failures = 0,
-          skipped = 2,
-          time = 0,
-          output = "",
-        },
-      }
-    end
+    stub_results({
+      ["Suite.First"] = { status = "skipped", time = 0, failures = {} },
+      ["Suite.Second"] = { status = "skipped", time = 0, failures = {} },
+    })
     local results = adapter.results(spec, nil, tree)
     assert.equals("skipped", results[test_file].status)
   end)
 
   describe("contains a namespace with passing tests and a failing non-namespaced test", function()
     it("adapter.results should set namespace status as passed and file status as failed", function()
-      spec.context.ctest.parse_test_results = function()
-        return {
-          ["Suite.First"] = {
-            status = "run",
-            time = 0,
-            output = "",
-          },
-          ["Suite.Second"] = {
-            status = "fail",
-            time = 0,
-            output = "",
-          },
-          summary = {
-            tests = 2,
-            failures = 1,
-            skipped = 0,
-            time = 0,
-            output = "",
-          },
-        }
-      end
+      stub_results({
+        ["Suite.First"] = { status = "passed", time = 0, failures = {} },
+        ["Suite.Second"] = { status = "failed", time = 0, failures = { "boom" } },
+      })
       local results = adapter.results(spec, nil, tree)
       assert.equals("failed", results[test_file].status)
       assert.equals("passed", results[test_file .. "::" .. namespace].status)
