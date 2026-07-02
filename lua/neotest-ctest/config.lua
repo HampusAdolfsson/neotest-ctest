@@ -31,6 +31,7 @@ local function default_filter_dir(name, rel_path, root)
   end
 
   local dir_filters = {
+    [".git"] = false,
     ["build"] = false,
     ["cmake"] = false,
     ["doc"] = false,
@@ -54,6 +55,11 @@ local default_config = {
   -- DAP adapter name to use for debugging (e.g. "codelldb", "cppdbg").
   -- Set to nil to disable debug support.
   dap_adapter = nil,
+  -- Directory to locate CTest in (searched for CTestTestfile.cmake). Use this
+  -- when the CMake build tree lives outside the source `root` (e.g. an
+  -- out-of-source build dir). May be a string or a function receiving the
+  -- resolved source root. Defaults to `root` when nil.
+  ctest_dir = nil,
 }
 
 local config = default_config

@@ -6,12 +6,12 @@ gtest.include_query = [[
   ;; query
   (preproc_include
     path: (system_lib_string) @system.include
-    (#match? @system.include "^\\<(gtest/)?gtest\.h\\>$")
+    (#match? @system.include "^\\<((gtest/)?gtest|gmock/gmock)\.h\\>$")
   )
   ;; query
   (preproc_include
     path: (string_literal) @local.include
-    (#match? @local.include "^\"(gtest/)?gtest\.h\"$")
+    (#match? @local.include "^\"((gtest/)?gtest|gmock/gmock)\.h\"$")
   )
 ]]
 gtest.tests_query = [[
@@ -91,7 +91,7 @@ function gtest.parse_xml_errors(failure_texts)
     -- Line number is the trailing ":<digits>" on the header, optionally
     -- followed by ": Failure".
     local line = string.match(header, ":(%d+):%s*[Ff]ailure")
-      or string.match(header, ":(%d+)%s*$")
+        or string.match(header, ":(%d+)%s*$")
 
     local message = string.match(text, "[\r\n]+(.*)$") or ""
     message = vim.trim(message)
@@ -183,9 +183,9 @@ function gtest.build_parameterized(source, parent)
 
     local group = vim.treesitter.get_node_text(captured_nodes["parameterized.group"], source)
     local param_generator =
-      vim.treesitter.get_node_text(captured_nodes["parameterized.param_generator"], source)
+        vim.treesitter.get_node_text(captured_nodes["parameterized.param_generator"], source)
     local param_args =
-      vim.treesitter.get_node_text(captured_nodes["parameterized.param_args"], source)
+        vim.treesitter.get_node_text(captured_nodes["parameterized.param_args"], source)
 
     -- TODO: support name_generator
     local prefix = group

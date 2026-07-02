@@ -68,7 +68,13 @@ function adapter.build_spec(args)
 
   local cwd = vim.loop.cwd()
   local root = adapter.root(position.path) or cwd
-  local ctest = require("neotest-ctest.ctest"):new(root)
+
+  -- The CMake build tree (where CTest lives) may sit outside the source root.
+  local ctest_dir = config.ctest_dir
+  if type(ctest_dir) == "function" then
+    ctest_dir = ctest_dir(root)
+  end
+  local ctest = require("neotest-ctest.ctest"):new(ctest_dir or root)
   local framework = require("neotest-ctest.framework").detect(position.path)
 
   -- Map every discovered gtest case to the binary that hosts it.
