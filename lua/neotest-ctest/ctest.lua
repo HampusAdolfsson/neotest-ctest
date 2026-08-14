@@ -11,7 +11,16 @@ local ctest = {}
 local binary_map_cache = {}
 
 function ctest:run(args)
-  local cmd = { unpack(config.cmd), "--test-dir", self._test_dir, unpack(args) }
+  -- Resolved per invocation when it's a function, the way `ctest_dir` and `root`
+  -- are: a multi-config build tree needs `-C <config>` to say which
+  -- configuration's tests it is being asked about, and that can change between
+  -- runs without the adapter being set up again.
+  local cmd = config.cmd
+  if type(cmd) == "function" then
+    cmd = cmd()
+  end
+
+  cmd = { unpack(cmd), "--test-dir", self._test_dir, unpack(args) }
   local _, result = lib.process.run(cmd, { stdout = true, stderr = true })
 
   return result.stdout

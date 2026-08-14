@@ -50,6 +50,10 @@ local default_config = {
   is_test_file = default_is_test_file,
   filter_dir = default_filter_dir,
   frameworks = { "gtest", "catch2", "doctest", "cpputest" },
+  -- The ctest invocation, before `--test-dir` and the query arguments are
+  -- appended. May be a list or a function returning one, resolved per
+  -- invocation - which is what lets a multi-config build tree pass the
+  -- `-C <config>` its tests are guarded by without being set up again.
   cmd = { "ctest" },
   extra_args = {},
   -- DAP adapter name to use for debugging (e.g. "codelldb", "cppdbg").
